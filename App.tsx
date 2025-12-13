@@ -30,6 +30,7 @@ const App: React.FC = () => {
   // Game Logic States
   const [timeLeft, setTimeLeft] = useState(INITIAL_TIME);
   const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
+  const [startCountdown, setStartCountdown] = useState(5); // Pre-game countdown
   
   // Current Session Score (Points/Wins in this run)
   const [score, setScore] = useState(0);
@@ -59,8 +60,6 @@ const App: React.FC = () => {
       setUser(loadedUser);
       // Sync history from cloud to prevent repeats
       syncUserHistory(loadedUser.nickname);
-    } else {
-      setShowAuth(true);
     }
     
     setStats(loadedStats);
@@ -73,7 +72,26 @@ const App: React.FC = () => {
     }
   }, [isSoundEnabled]);
 
-  // Timer Logic
+  // Pre-Game Countdown Logic
+  useEffect(() => {
+    let interval: number;
+    if (gameStatus === GameStatus.COUNTDOWN) {
+        if (startCountdown > 0) {
+            playSfx('tick');
+            interval = window.setTimeout(() => {
+                setStartCountdown(prev => prev - 1);
+            }, 1000);
+        } else {
+            // Countdown finished, start game
+            playSfx('start');
+            setGameStatus(GameStatus.PLAYING);
+            setTimeout(() => setOpacityClass('opacity-100'), 50);
+        }
+    }
+    return () => clearTimeout(interval);
+  }, [gameStatus, startCountdown, playSfx]);
+
+  // Game Timer Logic
   useEffect(() => {
     if (gameStatus === GameStatus.PLAYING) {
       timerRef.current = window.setInterval(() => {
@@ -167,18 +185,34 @@ const App: React.FC = () => {
     }, 3000);
   };
 
+  // Initiate the pre-game countdown
+  const initiateCountdown = useCallback(async () => {
+    setOpacityClass('opacity-0');
+    await new Promise(r => setTimeout(r, 300));
+    
+    setStartCountdown(5); // Reset countdown
+    setGameStatus(GameStatus.COUNTDOWN);
+    
+    setTimeout(() => setOpacityClass('opacity-100'), 50);
+  }, []);
+
   const handleRegister = (newUser: User) => {
     saveUser(newUser);
     setUser(newUser);
     setShowAuth(false);
-    // Sync history immediately upon login/register
     syncUserHistory(newUser.nickname);
+
+    if (gameStatus === GameStatus.READY) {
+        setTimeout(() => {
+            initiateCountdown();
+        }, 300);
+    }
   };
 
   const handleLogout = () => {
     logoutUser();
     setUser(null);
-    setShowAuth(true);
+    initGame(); 
   };
 
   // Initial Load with Fade (Starts a fresh run)
@@ -273,11 +307,11 @@ const App: React.FC = () => {
   }, [initGame]);
 
   const handleStartGame = async () => {
-    playSfx('start');
-    setOpacityClass('opacity-0');
-    await new Promise(r => setTimeout(r, 300));
-    setGameStatus(GameStatus.PLAYING);
-    setTimeout(() => setOpacityClass('opacity-100'), 50);
+    if (!user) {
+        setShowAuth(true);
+        return;
+    }
+    initiateCountdown();
   };
 
   const handleRestartAfterRanking = () => {
@@ -298,8 +332,6 @@ const App: React.FC = () => {
     
     // Check for duplicates - Prevent checking the same number twice
     if (guesses.some(g => g.value === numericValue)) {
-        // Here we could add a shake animation or toast, but for now just return
-        // to save the user an attempt.
         return;
     }
 
@@ -325,13 +357,9 @@ const App: React.FC = () => {
       const newStats = updateStats(true);
       setStats(newStats);
 
-      // (Optional) We could update Cloud High Score here too, but usually it's better on Game Over
-      // or we can update it incrementally if we want live leaderboards.
-      // For now, let's stick to Game Over for DB efficiency, or intermediate updates.
-      // Let's update incrementally to be safe against crashes.
       updatePlayerScore(user, newScore, newStats.streak);
       
-      // Auto-advance after 8 seconds, but save ref to allow manual skip
+      // Auto-advance after 8 seconds
       if (nextLevelTimerRef.current) clearTimeout(nextLevelTimerRef.current);
       nextLevelTimerRef.current = window.setTimeout(() => {
         startNextLevel();
@@ -372,10 +400,25 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] text-gray-800 pb-40">
+    <div className="min-h-screen bg-[#f8f9fa] text-gray-800 pb-40 relative overflow-hidden">
       
       {/* Toast Notification for Mock Emails */}
       <EmailToast />
+
+      {/* FULL SCREEN COUNTDOWN OVERLAY */}
+      {gameStatus === GameStatus.COUNTDOWN && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-purple-600 animate-[fadeIn_0.3s_ease-out]">
+             <div className="text-white text-3xl font-extrabold uppercase tracking-widest mb-8 animate-bounce">
+                Prepare-se
+             </div>
+             <div className="text-white text-[10rem] font-black leading-none drop-shadow-xl tabular-nums animate-[ping_1s_ease-in-out_infinite]">
+                {startCountdown}
+             </div>
+             <div className="mt-8 text-purple-200 text-sm font-medium">
+                O jogo vai começar...
+             </div>
+          </div>
+      )}
 
       <Header 
         user={user}
@@ -388,7 +431,7 @@ const App: React.FC = () => {
       {/* Dynamic Content Container with Fade Transition */}
       <div className={`w-full transition-opacity duration-500 ease-in-out ${opacityClass}`}>
           {/* Status Bar (Timer & Attempts) - Only show when PLAYING, WON or LOST */}
-          {gameStatus !== GameStatus.LOADING && gameStatus !== GameStatus.READY && (
+          {(gameStatus === GameStatus.PLAYING || gameStatus === GameStatus.WON || gameStatus === GameStatus.LOST) && (
               <GameStatusBar 
                 timeLeft={timeLeft} 
                 attemptsLeft={attemptsLeft} 
@@ -448,7 +491,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* QUESTION SCREEN (PLAYING/WON/LOST STATE) */}
-                {gameStatus !== GameStatus.READY && (
+                {gameStatus !== GameStatus.READY && gameStatus !== GameStatus.COUNTDOWN && (
                     <>
                         <div className="text-center mb-6 w-full mt-4 relative">
                             <span className="inline-block px-3 py-1 bg-purple-100 text-purple-700 text-xs font-bold uppercase tracking-wider rounded-full mb-3">
@@ -483,7 +526,7 @@ const App: React.FC = () => {
           </main>
       </div>
 
-      {gameStatus !== GameStatus.LOADING && gameStatus !== GameStatus.READY && (
+      {gameStatus !== GameStatus.LOADING && gameStatus !== GameStatus.READY && gameStatus !== GameStatus.COUNTDOWN && (
         <GameControls 
             onGuess={handleGuess} 
             status={gameStatus} 
@@ -516,6 +559,7 @@ const App: React.FC = () => {
       <AuthModal 
         isOpen={showAuth}
         onRegister={handleRegister}
+        onClose={() => setShowAuth(false)}
       />
     </div>
   );

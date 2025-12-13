@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { UserIcon } from './Icons';
+import { UserIcon, CloseIcon } from './Icons';
 import { checkAvailability, createPlayer, loginPlayer, recoverCode, generateCode, sendVerificationEmail } from '../services/authService';
 
 interface AuthModalProps {
   isOpen: boolean;
   onRegister: (user: User) => void;
+  onClose?: () => void;
 }
 
 type AuthMode = 'LOGIN' | 'REGISTER' | 'VERIFY' | 'RECOVER';
 
-const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onRegister }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onRegister, onClose }) => {
   const [mode, setMode] = useState<AuthMode>('REGISTER');
   const [email, setEmail] = useState('');
   const [nickname, setNickname] = useState('');
@@ -148,9 +149,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onRegister }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-[scaleIn_0.3s_ease-out]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-[scaleIn_0.3s_ease-out] relative" onClick={e => e.stopPropagation()}>
         
+        {/* Close Button */}
+        {onClose && (
+            <button 
+                onClick={onClose} 
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors z-10"
+            >
+                <CloseIcon className="w-5 h-5" />
+            </button>
+        )}
+
         {/* Tabs - Hidden during verification to prevent state loss */}
         {mode !== 'VERIFY' && (
             <div className="flex border-b border-gray-100">

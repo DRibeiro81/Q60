@@ -23,6 +23,7 @@ export interface Guess {
 export enum GameStatus {
   LOADING = 'LOADING',
   READY = 'READY',
+  COUNTDOWN = 'COUNTDOWN',
   PLAYING = 'PLAYING',
   WON = 'WON',
   LOST = 'LOST',
