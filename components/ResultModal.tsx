@@ -1,52 +1,21 @@
 import React from 'react';
 import { TriviaQuestion, Guess, GameStatus, GuessState } from '../types';
-import { TrophyIcon, RefreshIcon, XCircleIcon, ClockIcon, TargetIcon } from './Icons';
+import { TrophyIcon, RefreshIcon, XCircleIcon, ClockIcon, TargetIcon, PlayIcon } from './Icons';
 
 interface ResultModalProps {
   status: GameStatus;
   question: TriviaQuestion;
   guesses: Guess[];
   onPlayAgain: () => void;
+  onNextLevel?: () => void; // New Prop for winning state
   reason?: 'time' | 'attempts';
+  score?: number; // Score achieved in this run
 }
 
-const ResultModal: React.FC<ResultModalProps> = ({ status, question, guesses, onPlayAgain, reason }) => {
+const ResultModal: React.FC<ResultModalProps> = ({ status, question, guesses, onPlayAgain, onNextLevel, reason, score }) => {
   if (status !== GameStatus.WON && status !== GameStatus.LOST) return null;
 
   const isWin = status === GameStatus.WON;
-
-  const handleShare = async () => {
-    // Generate Emoji Grid similar to Wordle/Palpitada
-    const emojis = guesses.map(g => {
-        if (g.state === GuessState.CORRECT) return '✅';
-        if (g.proximity > 80) return '🔥'; // Hot
-        if (g.proximity > 50) return '🥵'; // Warm
-        if (g.proximity > 20) return '😎'; // Cold
-        return '🥶'; // Freezing
-    }).join(' ');
-
-    const title = isWin ? `Acertei em ${guesses.length} tentativas!` : `Não consegui desta vez...`;
-    
-    const text = `Quiz60 - ${question.category}\n\n${question.question}\n\n${emojis}\n\nJogue agora: ${window.location.origin}`;
-
-    if (navigator.share) {
-        try {
-            await navigator.share({
-                title: 'Quiz60',
-                text: text,
-            });
-        } catch (err) {
-            console.log('Share canceled');
-        }
-    } else {
-        try {
-            await navigator.clipboard.writeText(text);
-            alert('Resultado copiado para a área de transferência! Cole no WhatsApp ou Twitter.');
-        } catch (err) {
-            alert('Erro ao copiar.');
-        }
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
@@ -99,16 +68,18 @@ const ResultModal: React.FC<ResultModalProps> = ({ status, question, guesses, on
                 </div>
 
                 <div className="flex gap-3 mb-4">
+                     {/* Botão Próxima Pergunta substituindo o Compartilhar */}
                      <button
-                        onClick={handleShare}
+                        onClick={onNextLevel}
                         className="flex-1 h-12 flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-all shadow-lg shadow-green-200 active:scale-95"
                     >
-                        Compartilhar
+                        <span>Próxima Pergunta</span>
+                        <PlayIcon className="w-5 h-5 fill-current" />
                     </button>
                 </div>
 
                 <div className="mt-4">
-                    <p className="text-sm font-semibold text-purple-600 mb-2">Próxima fase em...</p>
+                    <p className="text-sm font-semibold text-purple-600 mb-2">Próxima fase automática em...</p>
                     <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
                         <div className="h-full bg-purple-500 animate-[progress_8s_linear_forwards] origin-left"></div>
                     </div>
@@ -123,9 +94,17 @@ const ResultModal: React.FC<ResultModalProps> = ({ status, question, guesses, on
           ) : (
             /* Loss State */
             <div className="mb-6">
-                <p className="text-gray-500 text-lg mb-4">
+                <p className="text-gray-500 text-lg mb-2">
                     Você não conseguiu desta vez.
                 </p>
+                
+                {/* Score Display */}
+                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 mb-6">
+                    <span className="text-xs font-bold text-purple-400 uppercase tracking-widest block mb-1">Pontuação Final</span>
+                    <span className="text-4xl font-black text-purple-600">{score || 0}</span>
+                    <span className="text-sm font-bold text-purple-400 ml-1">pontos</span>
+                </div>
+
                 <div className="text-sm text-gray-400 animate-pulse">
                     Aguarde o ranking...
                 </div>

@@ -203,6 +203,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onRegister }) => {
                     value={nickname}
                     onChange={(e) => setNickname(e.target.value)}
                     placeholder="Seu nome no jogo"
+                    autoComplete="off"
                     className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all"
                 />
                 </div>
@@ -216,6 +217,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onRegister }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com"
+                  autoComplete="email" 
                   className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all"
                 />
               </div>
@@ -231,6 +233,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onRegister }) => {
                   value={accessCode}
                   onChange={(e) => setAccessCode(e.target.value)}
                   placeholder="Consulte seu e-mail"
+                  autoComplete="off"
                   className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 text-gray-900 focus:bg-white focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all text-center tracking-widest font-mono text-lg"
                 />
               </div>

@@ -53,7 +53,7 @@ const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, onRestart,
                 <tr>
                     <th className="py-2 pl-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Pos</th>
                     <th className="py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Jogador</th>
-                    <th className="py-2 pr-2 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Vitórias</th>
+                    <th className="py-2 pr-2 text-right text-xs font-bold text-gray-400 uppercase tracking-wider">Pontos</th>
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -61,7 +61,7 @@ const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, onRestart,
                     <tr 
                         key={idx} 
                         className={`
-                            ${entry.isCurrentUser ? 'bg-purple-50' : 'hover:bg-gray-50'} 
+                            ${entry.isCurrentUser ? 'bg-purple-100' : 'hover:bg-gray-50'} 
                             transition-colors
                         `}
                     >
@@ -73,19 +73,19 @@ const RankingModal: React.FC<RankingModalProps> = ({ isOpen, onClose, onRestart,
                         ) : idx === 2 ? (
                             <span className="flex items-center justify-center w-6 h-6 bg-orange-100 text-orange-800 rounded-full font-bold text-xs">3</span>
                         ) : (
-                            <span className="flex items-center justify-center w-6 h-6 text-gray-500 font-medium text-xs">#{idx + 1}</span>
+                            <span className={`flex items-center justify-center w-6 h-6 font-medium text-xs ${entry.isCurrentUser ? 'text-purple-700 font-bold' : 'text-gray-500'}`}>#{idx + 1}</span>
                         )}
                     </td>
                     <td className="py-3">
-                        <div className="font-semibold text-gray-800 flex items-center gap-2">
+                        <div className={`flex items-center gap-2 ${entry.isCurrentUser ? 'font-black text-purple-900' : 'font-semibold text-gray-800'}`}>
                             {entry.nickname}
                             {entry.isCurrentUser && (
-                                <span className="text-[10px] bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded font-bold uppercase">Você</span>
+                                <span className="text-[10px] bg-purple-600 text-white px-1.5 py-0.5 rounded font-bold uppercase">Você</span>
                             )}
                         </div>
                         {entry.streak > 0 && <div className="text-[10px] text-green-600 font-medium">🔥 {entry.streak} seguidas</div>}
                     </td>
-                    <td className="py-3 pr-2 text-right font-bold text-gray-900">{entry.wins}</td>
+                    <td className={`py-3 pr-2 text-right font-bold ${entry.isCurrentUser ? 'text-purple-900 text-lg' : 'text-gray-900'}`}>{entry.wins}</td>
                     </tr>
                 ))}
                 </tbody>

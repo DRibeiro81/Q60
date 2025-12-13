@@ -2,17 +2,10 @@ import { supabase } from './supabaseClient';
 import { User } from '../types';
 import emailjs from '@emailjs/browser';
 
-// --- CONFIGURAÇÃO OBRIGATÓRIA DO EMAILJS ---
-// Para o email funcionar, você precisa criar um Template no site do EmailJS:
-// 1. Acesse https://dashboard.emailjs.com/admin/templates
-// 2. Crie um novo template.
-// 3. No corpo do email, use: "Olá {{nickname}}, seu código é {{code}}"
-// 4. Nas configurações do template (Settings), no campo "To Email", coloque: {{to_email}}
-// 5. Salve e COPIE o ID do template (ex: template_abc123) e cole abaixo.
-
-const EMAILJS_SERVICE_ID = 'service_jsktwjm'; // ID Configurado
-const EMAILJS_PUBLIC_KEY = 'akT9a2pbTBWKhZ7_a'; // Chave Configurada
-const EMAILJS_TEMPLATE_ID = 'template_ID_AQUI'; // <--- SUBSTITUA ISSO PELO SEU TEMPLATE ID
+// --- CONFIGURAÇÃO DO EMAILJS ---
+const EMAILJS_SERVICE_ID = 'service_jsktwjm'; 
+const EMAILJS_PUBLIC_KEY = 'akT9a2pbTBWKhZ7_a'; 
+const EMAILJS_TEMPLATE_ID = 'template_qf7ay97'; // ID Real Configurado
 
 // Helper to generate a 6-digit code
 export const generateCode = () => {
@@ -20,14 +13,9 @@ export const generateCode = () => {
 };
 
 export const sendVerificationEmail = async (email: string, code: string, nickname: string): Promise<boolean> => {
-  // Verificação de segurança
-  if (EMAILJS_TEMPLATE_ID === 'template_ID_AQUI') {
-      console.error("❌ ERRO CRÍTICO: Template ID do EmailJS não configurado.");
-      alert("ERRO: O desenvolvedor precisa configurar o Template ID no arquivo services/authService.ts para que o email seja enviado.");
-      return false;
-  }
-
   try {
+    console.log(`Tentando enviar email para ${email}...`);
+    
     await emailjs.send(
         EMAILJS_SERVICE_ID, 
         EMAILJS_TEMPLATE_ID, 
@@ -41,8 +29,9 @@ export const sendVerificationEmail = async (email: string, code: string, nicknam
     console.log(`✅ Email enviado com sucesso para ${email}`);
     return true;
   } catch (error) {
-    console.error('❌ FALHA AO ENVIAR EMAIL REAL:', error);
-    alert('Erro ao conectar com serviço de e-mail. Verifique o console.');
+    console.error('❌ Erro ao enviar email via EmailJS:', error);
+    // Retorna false para que o frontend mostre a mensagem de erro ao usuário
+    // em vez de simular sucesso falso.
     return false;
   }
 };

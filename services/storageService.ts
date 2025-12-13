@@ -1,9 +1,12 @@
-import { User, PlayerStats } from '../types';
+import { User, PlayerStats, TriviaQuestion } from '../types';
 
 const USER_KEY = 'quiz60_user';
 const STATS_KEY = 'quiz60_stats';
 const HISTORY_KEY = 'quiz60_question_history';
 const LAST_CAT_KEY = 'quiz60_last_category';
+// Alterado para v2 para invalidar o cache anterior e forçar novas perguntas com a nova lógica
+const QUESTION_CACHE_KEY = 'quiz60_questions_cache_v2';
+const MAX_HISTORY_SIZE = 100; // Limite exato solicitado
 
 export const getUser = (): User | null => {
   const stored = localStorage.getItem(USER_KEY);
@@ -50,11 +53,26 @@ export const getQuestionHistory = (): string[] => {
   return stored ? JSON.parse(stored) : [];
 };
 
+export const setQuestionHistory = (history: string[]) => {
+  // Enforce limit strictly when setting manually
+  const limitedHistory = history.slice(-MAX_HISTORY_SIZE);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(limitedHistory));
+};
+
 export const addQuestionToHistory = (questionText: string) => {
-  const history = getQuestionHistory();
-  if (!history.includes(questionText)) {
-    // Keep history manageable, maybe max 500 questions? 
+  let history = getQuestionHistory();
+  
+  // Normalize checking to avoid almost-duplicates
+  const exists = history.some(h => h.trim().toLowerCase() === questionText.trim().toLowerCase());
+
+  if (!exists) {
     history.push(questionText);
+    
+    // Sliding window: Keep only the last 100
+    if (history.length > MAX_HISTORY_SIZE) {
+        history = history.slice(-MAX_HISTORY_SIZE);
+    }
+    
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   }
 };
@@ -66,3 +84,60 @@ export const getLastCategory = (): string | null => {
 export const setLastCategory = (category: string) => {
   localStorage.setItem(LAST_CAT_KEY, category);
 };
+
+// --- Question Cache Management (Batching) ---
+
+// Função auxiliar para limpar cache antigo (v1) se existir, para manter o storage limpo
+const clearLegacyCache = () => {
+    if (localStorage.getItem('quiz60_questions_cache')) {
+        localStorage.removeItem('quiz60_questions_cache');
+    }
+};
+
+export const cacheQuestions = (questions: TriviaQuestion[]) => {
+  try {
+    const currentCacheStr = localStorage.getItem(QUESTION_CACHE_KEY);
+    const currentCache: TriviaQuestion[] = currentCacheStr ? JSON.parse(currentCacheStr) : [];
+    
+    // Append new questions to existing cache
+    const updatedCache = [...currentCache, ...questions];
+    localStorage.setItem(QUESTION_CACHE_KEY, JSON.stringify(updatedCache));
+  } catch (e) {
+    console.error("Error caching questions", e);
+  }
+};
+
+export const popCachedQuestion = (): TriviaQuestion | null => {
+  // Limpeza proativa de cache antigo na primeira execução
+  clearLegacyCache();
+
+  try {
+    const cacheStr = localStorage.getItem(QUESTION_CACHE_KEY);
+    if (!cacheStr) return null;
+
+    const cache: TriviaQuestion[] = JSON.parse(cacheStr);
+    
+    if (cache.length === 0) return null;
+
+    // Take the first one
+    const question = cache.shift();
+    
+    // Save the rest back
+    localStorage.setItem(QUESTION_CACHE_KEY, JSON.stringify(cache));
+    
+    return question || null;
+  } catch (e) {
+    console.error("Error popping cached question", e);
+    return null;
+  }
+};
+
+export const getCacheSize = (): number => {
+    const cacheStr = localStorage.getItem(QUESTION_CACHE_KEY);
+    return cacheStr ? JSON.parse(cacheStr).length : 0;
+}
+
+// Exporting for manual usage if needed
+export const clearQuestionCache = () => {
+    localStorage.removeItem(QUESTION_CACHE_KEY);
+}

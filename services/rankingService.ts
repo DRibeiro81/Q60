@@ -1,6 +1,5 @@
-
 import { supabase } from './supabaseClient';
-import { User, PlayerStats } from '../types';
+import { User } from '../types';
 import { getStats, getUser } from './storageService';
 
 export interface RankingEntry {
@@ -46,7 +45,6 @@ export const fetchGlobalRanking = async (): Promise<RankingEntry[]> => {
   }
 
   try {
-    // Changed table from 'rankings' to 'players'
     const { data, error } = await supabase
       .from('players')
       .select('nickname, wins, streak')
@@ -68,22 +66,54 @@ export const fetchGlobalRanking = async (): Promise<RankingEntry[]> => {
   }
 };
 
-export const updatePlayerScore = async (user: User, stats: PlayerStats) => {
+// Update score ONLY if the new score represents a High Score (Best Run)
+export const updatePlayerScore = async (user: User, currentRunScore: number, currentStreak: number) => {
   if (!supabase) return;
 
   try {
-    // We update based on nickname, but we assume the user is authenticated if they are playing.
-    // In a stricter app, we would verify the access_code again or use auth.uid()
-    const { error } = await supabase
+    // 1. Fetch current High Score for this user
+    const { data: playerData, error: fetchError } = await supabase
       .from('players')
-      .update({ 
-        wins: stats.wins, 
-        streak: stats.streak,
-        last_played: new Date().toISOString()
-      })
-      .eq('nickname', user.nickname); // Targeting the unique nickname
+      .select('wins, streak')
+      .eq('nickname', user.nickname)
+      .maybeSingle();
 
-    if (error) throw error;
+    if (fetchError) throw fetchError;
+
+    if (playerData) {
+        // 2. Logic: Only update 'wins' if currentRunScore is higher than stored wins (High Score)
+        // We always update streak if it's the current session stats, but usually streak is tied to the high score run or just 'current best'.
+        // For this game, let's treat 'wins' as High Score (Max Points in a game) and streak as Best Streak.
+        
+        const updates: any = {
+            last_played: new Date().toISOString()
+        };
+        
+        // Update High Score
+        if (currentRunScore > playerData.wins) {
+            updates.wins = currentRunScore;
+        }
+
+        // Update Best Streak if current is better
+        if (currentStreak > playerData.streak) {
+            updates.streak = currentStreak;
+        }
+
+        // Only call update if there are changes to stats or just to update last_played
+        if (Object.keys(updates).length > 0) {
+             const { error: updateError } = await supabase
+                .from('players')
+                .update(updates)
+                .eq('nickname', user.nickname);
+
+             if (updateError) throw updateError;
+        }
+
+    } else {
+        // Fallback (shouldn't happen if user is logged in properly)
+        console.warn("User record not found during score update");
+    }
+
   } catch (error) {
     console.error("Error updating score:", error);
   }

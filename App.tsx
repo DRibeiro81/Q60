@@ -7,10 +7,12 @@ import InfoModal from './components/InfoModal';
 import AuthModal from './components/AuthModal';
 import RankingModal from './components/RankingModal';
 import GameStatusBar from './components/GameStatusBar';
+import EmailToast from './components/EmailToast';
 import { PlayIcon, ClockIcon, TargetIcon, QuizLogo, SpeakerIcon, SpeakerOffIcon } from './components/Icons';
 import { fetchDailyTrivia } from './services/geminiService';
 import { getUser, saveUser, logoutUser, getStats, updateStats, addQuestionToHistory } from './services/storageService';
 import { updatePlayerScore } from './services/rankingService';
+import { syncUserHistory, saveQuestionRemote } from './services/historyService';
 import { playSound } from './services/soundService';
 import { TriviaQuestion, Guess, GameStatus, GuessState, User, PlayerStats } from './types';
 
@@ -28,7 +30,15 @@ const App: React.FC = () => {
   // Game Logic States
   const [timeLeft, setTimeLeft] = useState(INITIAL_TIME);
   const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
+  
+  // Current Session Score (Points/Wins in this run)
+  const [score, setScore] = useState(0);
+  const scoreRef = useRef(0); // Ref to access current score inside closures (timers)
+
   const timerRef = useRef<number | null>(null);
+  // Ref to handle the auto-advance timer so we can cancel it manually
+  const nextLevelTimerRef = useRef<number | null>(null);
+  
   const [lossReason, setLossReason] = useState<'time' | 'attempts'>('time');
 
   // Animation State
@@ -40,13 +50,15 @@ const App: React.FC = () => {
   const [showRanking, setShowRanking] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   
-  // Initialize User
+  // Initialize User & Sync History
   useEffect(() => {
     const loadedUser = getUser();
     const loadedStats = getStats();
     
     if (loadedUser) {
       setUser(loadedUser);
+      // Sync history from cloud to prevent repeats
+      syncUserHistory(loadedUser.nickname);
     } else {
       setShowAuth(true);
     }
@@ -125,6 +137,7 @@ const App: React.FC = () => {
   useEffect(() => {
     return () => {
         window.speechSynthesis.cancel();
+        if (nextLevelTimerRef.current) clearTimeout(nextLevelTimerRef.current);
     };
   }, []);
 
@@ -133,11 +146,14 @@ const App: React.FC = () => {
     setLossReason(reason);
     setGameStatus(GameStatus.LOST);
     
-    // Update Stats locally and DB
-    const newStats = updateStats(false); // Reset streak
+    // Update Stats locally (Lifetime stats)
+    const newStats = updateStats(false); // Reset streak in local storage
     setStats(newStats);
+    
+    // Send current run score (High Score Logic) to Cloud
     if (user) {
-        updatePlayerScore(user, newStats);
+        // We pass the current run score (scoreRef.current) and the current best streak from stats
+        updatePlayerScore(user, scoreRef.current, newStats.bestStreak);
     }
 
     // Open Ranking after 3 seconds on elimination
@@ -150,6 +166,8 @@ const App: React.FC = () => {
     saveUser(newUser);
     setUser(newUser);
     setShowAuth(false);
+    // Sync history immediately upon login/register
+    syncUserHistory(newUser.nickname);
   };
 
   const handleLogout = () => {
@@ -158,12 +176,17 @@ const App: React.FC = () => {
     setShowAuth(true);
   };
 
-  // Initial Load with Fade
+  // Initial Load with Fade (Starts a fresh run)
   const initGame = useCallback(async () => {
     setGameStatus(GameStatus.LOADING);
     setGuesses([]);
     setTimeLeft(INITIAL_TIME); // Reset global timer
     setAttemptsLeft(MAX_ATTEMPTS);
+    
+    // Reset Score for new run
+    setScore(0);
+    scoreRef.current = 0;
+
     setOpacityClass('opacity-100'); // Start visible
     
     const data = await fetchDailyTrivia();
@@ -173,15 +196,30 @@ const App: React.FC = () => {
     await new Promise(r => setTimeout(r, 500));
 
     setQuestion(data);
-    addQuestionToHistory(data.question); 
+    
+    // Save locally
+    addQuestionToHistory(data.question);
+    
+    // Save to Cloud if logged in
+    const currentUser = getUser();
+    if (currentUser) {
+        saveQuestionRemote(currentUser.nickname, data.question);
+    }
+
     setGameStatus(GameStatus.READY); 
 
     // Fade in Ready Screen
     setTimeout(() => setOpacityClass('opacity-100'), 50);
   }, []);
 
-  // Next Level with Fade
+  // Next Level with Fade (Continues current run)
   const startNextLevel = useCallback(async () => {
+    // Clear any pending timer if manually triggered
+    if (nextLevelTimerRef.current) {
+        clearTimeout(nextLevelTimerRef.current);
+        nextLevelTimerRef.current = null;
+    }
+
     // 1. Fade out current content
     setOpacityClass('opacity-0');
     await new Promise(r => setTimeout(r, 500));
@@ -203,13 +241,27 @@ const App: React.FC = () => {
 
     // 5. Update data and set Playing
     setQuestion(data);
+    
+    // Save Locally
     addQuestionToHistory(data.question);
+
+    // Save to Cloud
+    const currentUser = getUser();
+    if (currentUser) {
+        saveQuestionRemote(currentUser.nickname, data.question);
+    }
+
     setGameStatus(GameStatus.PLAYING); 
     playSfx('start'); // Subtle start sound for next level
     
     // 6. Fade in new question
     setTimeout(() => setOpacityClass('opacity-100'), 50);
   }, [playSfx]);
+
+  // Wrapper for manual trigger
+  const handleManualNextLevel = () => {
+    startNextLevel();
+  };
 
   useEffect(() => {
     initGame();
@@ -235,17 +287,23 @@ const App: React.FC = () => {
         return;
     }
 
+    // Ensure strict number type for the answer
+    const answer = Number(question.answer);
+    const numericValue = Number(value);
+    
+    // Check for duplicates - Prevent checking the same number twice
+    if (guesses.some(g => g.value === numericValue)) {
+        // Here we could add a shake animation or toast, but for now just return
+        // to save the user an attempt.
+        return;
+    }
+
     const newAttemptsLeft = attemptsLeft - 1;
     setAttemptsLeft(newAttemptsLeft);
 
-    const answer = question.answer;
-    
-    if (guesses.some(g => g.value === value)) {
-        // Skip duplicate logic for simplicity
-    }
-
     let state: GuessState;
-    if (value === answer) {
+    
+    if (numericValue === answer) {
       state = GuessState.CORRECT;
       playSfx('win');
       setGameStatus(GameStatus.WON);
@@ -253,21 +311,30 @@ const App: React.FC = () => {
       // Bonus Time!
       setTimeLeft(prev => prev + TIME_BONUS);
       
-      // Update Stats & DB
+      // Update Score
+      const newScore = score + 1;
+      setScore(newScore);
+      scoreRef.current = newScore;
+      
+      // Update Local Stats
       const newStats = updateStats(true);
       setStats(newStats);
-      if (user) {
-          updatePlayerScore(user, newStats);
-      }
+
+      // (Optional) We could update Cloud High Score here too, but usually it's better on Game Over
+      // or we can update it incrementally if we want live leaderboards.
+      // For now, let's stick to Game Over for DB efficiency, or intermediate updates.
+      // Let's update incrementally to be safe against crashes.
+      updatePlayerScore(user, newScore, newStats.streak);
       
-      // Auto-advance after 8 seconds
-      setTimeout(() => {
+      // Auto-advance after 8 seconds, but save ref to allow manual skip
+      if (nextLevelTimerRef.current) clearTimeout(nextLevelTimerRef.current);
+      nextLevelTimerRef.current = window.setTimeout(() => {
         startNextLevel();
       }, 8000);
 
     } else {
       // Incorrect logic
-      if (value < answer) {
+      if (numericValue < answer) {
         state = GuessState.HIGHER;
       } else {
         state = GuessState.LOWER;
@@ -275,7 +342,7 @@ const App: React.FC = () => {
       playSfx('wrong');
     }
 
-    const diff = Math.abs(answer - value);
+    const diff = Math.abs(answer - numericValue);
     const maxDiff = Math.max(Math.abs(answer) * 0.5, 100);
     
     let proximity = 0;
@@ -286,7 +353,7 @@ const App: React.FC = () => {
     }
 
     const newGuess: Guess = {
-      value,
+      value: numericValue,
       state,
       proximity,
       timestamp: Date.now(),
@@ -294,7 +361,7 @@ const App: React.FC = () => {
 
     setGuesses(prev => [...prev, newGuess]);
 
-    if (value !== answer && newAttemptsLeft <= 0) {
+    if (numericValue !== answer && newAttemptsLeft <= 0) {
         handleGameOver('attempts');
     }
   };
@@ -302,6 +369,9 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-gray-800 pb-40">
       
+      {/* Toast Notification for Mock Emails */}
+      <EmailToast />
+
       <Header 
         user={user}
         streak={stats.streak}
@@ -421,7 +491,9 @@ const App: React.FC = () => {
         question={question!}
         guesses={guesses}
         onPlayAgain={initGame} // Only used for Lost state button if ranking is closed
+        onNextLevel={handleManualNextLevel} // Manual trigger for WIN state
         reason={lossReason}
+        score={score} // Passing current run score
       />
 
       <InfoModal 
