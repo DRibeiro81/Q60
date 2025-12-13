@@ -33,7 +33,7 @@ const playTone = (freq: number, type: OscillatorType, duration: number, startTim
   osc.stop(ctx.currentTime + startTime + duration);
 };
 
-export const playSound = (type: 'correct' | 'wrong' | 'start' | 'win' | 'lose') => {
+export const playSound = (type: 'correct' | 'wrong' | 'start' | 'win' | 'lose' | 'tick') => {
   const ctx = getContext();
   if (ctx.state === 'suspended') ctx.resume();
 
@@ -87,6 +87,12 @@ export const playSound = (type: 'correct' | 'wrong' | 'start' | 'win' | 'lose') 
       playTone(300, 'triangle', 0.3, 0, 0.15);
       playTone(280, 'triangle', 0.3, 0.2, 0.15);
       playTone(180, 'sawtooth', 0.8, 0.4, 0.15);
+      break;
+
+    case 'tick':
+      // Woodblock/Clock tick - Short and dry
+      playTone(800, 'sine', 0.05, 0, 0.05);
+      playTone(1200, 'square', 0.01, 0, 0.02); // Click artifact
       break;
   }
 };

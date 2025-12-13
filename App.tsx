@@ -66,11 +66,23 @@ const App: React.FC = () => {
     setStats(loadedStats);
   }, []);
 
+  // Audio Logic (SFX Helper)
+  const playSfx = useCallback((type: 'correct' | 'wrong' | 'start' | 'win' | 'lose' | 'tick') => {
+    if (isSoundEnabled) {
+      playSound(type);
+    }
+  }, [isSoundEnabled]);
+
   // Timer Logic
   useEffect(() => {
     if (gameStatus === GameStatus.PLAYING) {
       timerRef.current = window.setInterval(() => {
         setTimeLeft((prev) => {
+          // Play tick sound if time is low (10s or less) but not yet finished
+          if (prev <= 11 && prev > 1) {
+            playSfx('tick');
+          }
+
           if (prev <= 1) {
             // Time's up
             if (timerRef.current) clearInterval(timerRef.current);
@@ -87,7 +99,7 @@ const App: React.FC = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [gameStatus]);
+  }, [gameStatus, playSfx]);
 
   // Audio Logic (Speech)
   const speakText = useCallback((text: string, force = false) => {
@@ -101,13 +113,6 @@ const App: React.FC = () => {
     utterance.rate = 1.0;
     
     window.speechSynthesis.speak(utterance);
-  }, [isSoundEnabled]);
-
-  // Audio Logic (SFX Helper)
-  const playSfx = useCallback((type: 'correct' | 'wrong' | 'start' | 'win' | 'lose') => {
-    if (isSoundEnabled) {
-      playSound(type);
-    }
   }, [isSoundEnabled]);
 
   const toggleSound = () => {

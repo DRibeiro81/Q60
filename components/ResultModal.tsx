@@ -104,17 +104,13 @@ const ResultModal: React.FC<ResultModalProps> = ({ status, question, guesses, on
                     <span className="text-4xl font-black text-purple-600">{score || 0}</span>
                     <span className="text-sm font-bold text-purple-400 ml-1">pontos</span>
                 </div>
-
-                <div className="text-sm text-gray-400 animate-pulse">
-                    Aguarde o ranking...
-                </div>
                 
                 <button
                     onClick={onPlayAgain}
                     className="w-full mt-6 h-12 flex items-center justify-center gap-2 border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold rounded-xl transition-all active:scale-95"
                 >
                     <RefreshIcon className="w-5 h-5" />
-                    Pular
+                    Voltar
                 </button>
             </div>
           )}
