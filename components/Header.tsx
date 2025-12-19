@@ -1,6 +1,9 @@
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { TrophyIcon, InfoIcon, ChartIcon, LogoutIcon, UserIcon, QuizLogo } from './Icons';
+import { TrophyIcon, InfoIcon, ChartIcon, LogoutIcon, UserIcon, QuizLogo, ShieldIcon } from './Icons';
+import LeaguesModal from './LeaguesModal';
+import { getActivePlayersCount } from '../services/rankingService';
 
 interface HeaderProps {
   user: User | null;
@@ -11,72 +14,100 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ user, streak, onShowInstructions, onShowRanking, onLogout }) => {
+  const [showLeagues, setShowLeagues] = useState(false);
+  const [onlinePlayers, setOnlinePlayers] = useState<number>(0);
+
+  useEffect(() => {
+    const updateOnline = async () => {
+      const count = await getActivePlayersCount();
+      setOnlinePlayers(count);
+    };
+    updateOnline();
+    const interval = setInterval(updateOnline, 60000); // Atualiza a cada 1 min
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-200">
-      <div className="max-w-3xl mx-auto px-4 h-18 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <QuizLogo className="w-10 h-10 drop-shadow-sm" />
-          <div className="flex flex-col justify-center">
-            <h1 className="text-2xl font-black tracking-tighter text-gray-900 leading-none">
-                QUIZ<span className="text-purple-600">60</span>
-            </h1>
-            <span className="text-[10px] font-extrabold text-purple-500 uppercase tracking-widest hidden sm:block">
-                Rápido, simples e viciante!
-            </span>
+    <>
+      <header className="sticky top-0 z-10 bg-[#0f0a1a]/90 backdrop-blur-xl border-b border-white/10">
+        <div className="max-w-4xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            < QuizLogo className="w-12 h-12 drop-shadow-[0_0_10px_rgba(139,92,246,0.4)]" />
+            <div className="flex flex-col justify-center">
+              <h1 className="text-3xl font-black tracking-tighter text-white leading-none italic">
+                  QUIZ<span className="text-purple-500">60</span>
+              </h1>
+              <span className="text-[9px] font-black text-purple-400 uppercase tracking-[0.2em] hidden sm:block">
+                  Arena de Batalha v2.0
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 sm:gap-4">
+            {user && (
+              <div className="hidden md:flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-md text-[10px] font-black text-white uppercase tracking-widest">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
+                <span>Jogadores Online: {onlinePlayers}</span>
+              </div>
+            )}
+
+            <button 
+              onClick={() => setShowLeagues(true)}
+              className="p-3 text-purple-400 bg-white/5 hover:bg-white/10 border border-white/10 rounded-md transition-all hover:scale-110"
+              title="Ligas"
+            >
+              <ShieldIcon className="w-5 h-5" />
+            </button>
+
+            <button 
+              onClick={onShowRanking}
+              className="p-3 text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-md transition-all hover:scale-110"
+              title="Ranking Global"
+            >
+              <ChartIcon className="w-5 h-5" />
+            </button>
+
+            <button 
+              onClick={onShowInstructions}
+              className="p-3 text-white/70 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-md transition-all hover:scale-110"
+              aria-label="Instruções"
+            >
+              <InfoIcon className="w-5 h-5" />
+            </button>
+
+            <div className="w-[1px] h-8 bg-white/10 mx-1"></div>
+
+            {user ? (
+              <div className="flex items-center gap-3 pl-2">
+                  <div className="hidden sm:flex flex-col items-end leading-none">
+                    <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Jogador</span>
+                    <span className="text-sm font-black text-white italic truncate max-w-[100px]">
+                        {user.nickname}
+                    </span>
+                  </div>
+                  <button 
+                      onClick={onLogout}
+                      className="p-3 text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 rounded-md transition-all"
+                      title="Sair"
+                  >
+                      <LogoutIcon className="w-5 h-5" />
+                  </button>
+              </div>
+            ) : (
+              <div className="w-10 h-10 bg-white/5 border border-white/10 rounded-md flex items-center justify-center text-white/30">
+                  <UserIcon className="w-6 h-6" />
+              </div>
+            )}
           </div>
         </div>
-        
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="hidden sm:flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full text-sm font-medium text-gray-700">
-            <TrophyIcon className="w-4 h-4 text-yellow-500" />
-            <span>Série: {streak}</span>
-          </div>
-
-          <button 
-            onClick={onShowRanking}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors relative group"
-            title="Ranking"
-          >
-            <ChartIcon className="w-5 h-5" />
-          </button>
-
-          <button 
-            onClick={onShowInstructions}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label="Instruções"
-          >
-            <InfoIcon className="w-5 h-5" />
-          </button>
-
-          <div className="w-px h-6 bg-gray-200 mx-1"></div>
-
-          {user ? (
-            <div className="flex items-center gap-2">
-                <span className="hidden sm:block text-sm font-semibold text-gray-700 max-w-[100px] truncate">
-                    {user.nickname}
-                </span>
-                <button 
-                    onClick={onLogout}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                    title="Sair"
-                >
-                    <LogoutIcon className="w-5 h-5" />
-                </button>
-            </div>
-          ) : (
-            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
-                <UserIcon className="w-5 h-5" />
-            </div>
-          )}
-        </div>
-      </div>
-      {/* Mobile Slogan */}
-      <div className="sm:hidden w-full bg-purple-50 border-b border-purple-100 py-1.5 text-center">
-         <span className="text-[10px] font-extrabold text-purple-600 uppercase tracking-widest">
-            Rápido, simples e viciante!
-        </span>
-      </div>
-    </header>
+      </header>
+      
+      <LeaguesModal 
+        isOpen={showLeagues} 
+        onClose={() => setShowLeagues(false)} 
+        user={user}
+      />
+    </>
   );
 };
 

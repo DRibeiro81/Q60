@@ -30,8 +30,6 @@ export const sendVerificationEmail = async (email: string, code: string, nicknam
     return true;
   } catch (error) {
     console.error('❌ Erro ao enviar email via EmailJS:', error);
-    // Retorna false para que o frontend mostre a mensagem de erro ao usuário
-    // em vez de simular sucesso falso.
     return false;
   }
 };
@@ -72,12 +70,13 @@ export const checkAvailability = async (nickname: string, email: string): Promis
   }
 };
 
-// 2. STEP TWO: Actually create the user (After code verification)
+// 2. STEP TWO: Verify code and Create Account
 export const createPlayer = async (email: string, nickname: string, code: string): Promise<{ success: boolean; message: string; user?: User }> => {
   if (!supabase) return { success: false, message: 'Banco de dados desconectado.' };
 
   try {
-    const { error: insertError } = await supabase
+    // Insert and SELECT to get the generated ID
+    const { data, error: insertError } = await supabase
       .from('players')
       .insert({
         email,
@@ -85,7 +84,9 @@ export const createPlayer = async (email: string, nickname: string, code: string
         access_code: code,
         wins: 0,
         streak: 0
-      });
+      })
+      .select('id, nickname, email, access_code')
+      .single();
 
     if (insertError) {
         throw insertError;
@@ -94,7 +95,12 @@ export const createPlayer = async (email: string, nickname: string, code: string
     return { 
       success: true, 
       message: 'Cadastro realizado com sucesso!',
-      user: { email, nickname, access_code: code }
+      user: { 
+        id: data.id,
+        email: data.email, 
+        nickname: data.nickname, 
+        access_code: data.access_code 
+      }
     };
 
   } catch (error: any) {
@@ -124,6 +130,7 @@ export const loginPlayer = async (nickname: string, code: string): Promise<{ suc
       success: true,
       message: 'Login realizado com sucesso!',
       user: {
+        id: data.id, // Important: Return the ID
         email: data.email,
         nickname: data.nickname,
         access_code: data.access_code

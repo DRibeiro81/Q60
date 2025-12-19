@@ -1,3 +1,4 @@
+
 import { supabase } from './supabaseClient';
 import { User } from '../types';
 import { getStats, getUser } from './storageService';
@@ -9,7 +10,6 @@ export interface RankingEntry {
   isCurrentUser?: boolean;
 }
 
-// Fallback Mock Data if DB is not connected
 const getLocalMockRanking = () => {
   const currentUser = getUser();
   const currentStats = getStats();
@@ -23,7 +23,6 @@ const getLocalMockRanking = () => {
   ];
 
   if (currentUser) {
-    // Check if user is already in mock to avoid duplication in display logic
     const exists = mockData.find(d => d.nickname === currentUser.nickname);
     if (!exists) {
         const userEntry = { 
@@ -66,55 +65,91 @@ export const fetchGlobalRanking = async (): Promise<RankingEntry[]> => {
   }
 };
 
-// Update score ONLY if the new score represents a High Score (Best Run)
-export const updatePlayerScore = async (user: User, currentRunScore: number, currentStreak: number) => {
+export const getActivePlayersCount = async (): Promise<number> => {
+  if (!supabase) return Math.floor(Math.random() * 5) + 1;
+
+  try {
+    const threeMinutesAgo = new Date(Date.now() - 3 * 60000).toISOString();
+    const { count, error } = await supabase
+      .from('players')
+      .select('*', { count: 'exact', head: true })
+      .gt('last_played', threeMinutesAgo);
+
+    if (error) throw error;
+    return count || 1;
+  } catch (e) {
+    console.error("Error fetching active players:", e);
+    return 1;
+  }
+};
+
+export const updatePlayerScore = async (user: User, currentRunScore: number, currentStreak: number, bestRankName?: string) => {
   if (!supabase) return;
 
   try {
-    // 1. Fetch current High Score for this user
     const { data: playerData, error: fetchError } = await supabase
       .from('players')
-      .select('wins, streak')
+      .select('wins, streak, best_rank')
       .eq('nickname', user.nickname)
       .maybeSingle();
 
     if (fetchError) throw fetchError;
 
     if (playerData) {
-        // 2. Logic: Only update 'wins' if currentRunScore is higher than stored wins (High Score)
-        // We always update streak if it's the current session stats, but usually streak is tied to the high score run or just 'current best'.
-        // For this game, let's treat 'wins' as High Score (Max Points in a game) and streak as Best Streak.
-        
         const updates: any = {
             last_played: new Date().toISOString()
         };
         
-        // Update High Score
         if (currentRunScore > playerData.wins) {
             updates.wins = currentRunScore;
         }
 
-        // Update Best Streak if current is better
         if (currentStreak > playerData.streak) {
             updates.streak = currentStreak;
         }
 
-        // Only call update if there are changes to stats or just to update last_played
-        if (Object.keys(updates).length > 0) {
-             const { error: updateError } = await supabase
-                .from('players')
-                .update(updates)
-                .eq('nickname', user.nickname);
-
-             if (updateError) throw updateError;
+        if (bestRankName) {
+            updates.best_rank = bestRankName;
         }
 
-    } else {
-        // Fallback (shouldn't happen if user is logged in properly)
-        console.warn("User record not found during score update");
-    }
+        const { error: updateError } = await supabase
+            .from('players')
+            .update(updates)
+            .eq('nickname', user.nickname);
 
+        if (updateError) throw updateError;
+    }
   } catch (error) {
     console.error("Error updating score:", error);
   }
+};
+
+export const getPlayerDashboardStats = async (user: User) => {
+    if (!supabase) return { rank: '-', lastPlayed: null, bestRank: 'Curioso' };
+
+    try {
+        const { data: player, error: pError } = await supabase
+            .from('players')
+            .select('wins, last_played, best_rank')
+            .eq('nickname', user.nickname)
+            .single();
+        
+        if (pError || !player) return { rank: '-', lastPlayed: null, bestRank: 'Curioso' };
+
+        const { count, error: cError } = await supabase
+            .from('players')
+            .select('*', { count: 'exact', head: true })
+            .gt('wins', player.wins);
+        
+        const rank = cError ? '-' : (count || 0) + 1;
+
+        return {
+            rank: rank,
+            lastPlayed: player.last_played,
+            bestRank: player.best_rank || 'Curioso'
+        };
+    } catch (e) {
+        console.error("Error fetching dashboard stats:", e);
+        return { rank: '-', lastPlayed: null, bestRank: 'Curioso' };
+    }
 };
